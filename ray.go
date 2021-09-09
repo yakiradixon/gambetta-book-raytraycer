@@ -44,7 +44,7 @@ type canvas struct {
 	pixels [][]color
 }
 
-func (c canvas) init(w, h int) *canvas {
+func (c canvas) init(w, h int) canvas {
 	pixels := make([][]color, h+1)
 	for x, pixel := range pixels {
 		pixels[x] = make([]color, w)
@@ -52,20 +52,20 @@ func (c canvas) init(w, h int) *canvas {
 			pixels[x][y] = color{0, 0, 0}
 		}
 	}
-	return &canvas{w, h, pixels}
+	return canvas{w, h, pixels}
 }
 
-func toPPM(c *canvas) string {
+func toPPM(c canvas) string {
 	return  ppmHeader(c) + ppmPixelData(c) + ppmFooter()
 }
 
-func ppmHeader(c *canvas) string {
+func ppmHeader(c canvas) string {
 	PPMFlavor := "P3"
 	MaxColorValue := 255
 	return fmt.Sprintf("%s\n%d %d\n%d\n", PPMFlavor, c.width, c.height, MaxColorValue)
 }
 
-func ppmPixelData(c *canvas) string {
+func ppmPixelData(c canvas) string {
 	var sb strings.Builder
 	var psb *strings.Builder = &sb
 	var rowdata string
@@ -125,24 +125,24 @@ func split(s string) (string, string) {
 }
 
 type viewport struct {
-	size int
+	size float64
 }
 
-func (c *canvas) toViewport(x int, y int, v viewport) tuple {
+func (c *canvas) toViewport(x float64, y float64, v viewport) tuple {
 	// 1 is the projection plane D, projection plane Z
-	return tuple{float64(x*v.size/c.width), float64(y*v.size/c.height), 1}
+	return tuple{x*v.size/float64(c.width), y*v.size/float64(c.height), 1}
 }
 
 func (c *canvas) putPixel(x int, y int, color color) {
 	sx := (c.width / 2) + x
 	sy := (c.height/2) - y - 1
-	// fmt.Printf("in putPixel:  %s %s", sx, sy)
 	c.pixels[sy][sx] = color
 }
 
 func traceRay(O tuple, D tuple, tMin float64, tMax float64, sc scene) color {
 	closestT := tMax
-	closestSphere := sphere{}
+	nilSphere := sphere{}
+	closestSphere := nilSphere
 	for _, s := range sc.spheres {
 		t1, t2 := intersectRaySphere(O, D, s)
 		if t1 < closestT && tMin < t1 && t1 < tMax {
@@ -153,12 +153,13 @@ func traceRay(O tuple, D tuple, tMin float64, tMax float64, sc scene) color {
 			closestT = t2
 			closestSphere = s
 		}
-		nilSphere := sphere{}
-		if closestSphere == nilSphere {
-			// Return background color
-			return color{255, 255, 255}
-		}
 	}
+
+	if closestSphere == nilSphere {
+		// Return background color
+		return color{255, 255, 255}
+	}
+
 	return closestSphere.color
 }
 
@@ -169,12 +170,12 @@ func intersectRaySphere(O tuple, D tuple, s sphere) (float64, float64) {
 	b := 2*CO.dot(D)
 	c := CO.dot(CO) - r * r
 
-	discriminant := b*b - 4*a*c
+	discriminant := float64(b*b - 4*a*c)
 	if discriminant < 0 {
 		return math.Inf(0), math.Inf(0)
 	}
-	t1 := (-float64(b) + math.Sqrt(float64(discriminant))) / float64(2*a)
-	t2 := (float64(b) - math.Sqrt(float64(discriminant))) / float64(2*a)
+	t1 := float64(-b) + math.Sqrt(discriminant) / float64(2*a)
+	t2 := float64(-b) - math.Sqrt(discriminant) / float64(2*a)
 	return t1, t2
 }
 
@@ -185,7 +186,7 @@ func check(e error) {
 }
 
 func main() {
-	c := &canvas{}
+	c := canvas{}
 	c = c.init(600, 600)
 
 	s := scene{}
@@ -196,9 +197,7 @@ func main() {
 
 	for x := -c.width/2; x < c.width/2; x++ {
 		for y := -c.height/2; y < c.height/2; y++ {
-			// fmt.Printf("in main loop x: %s y: %s", x, y)
-			D := c.toViewport(x, y, s.v)
-			fmt.Println(D)
+			D := c.toViewport(float64(x), float64(y), s.v)
 			color := traceRay(O, D, 1, math.Inf(0), s)
 			c.putPixel(x, y, color)
 		}
@@ -206,7 +205,7 @@ func main() {
 
 	ppm := toPPM(c)
 
-	f, err := os.Create("rs.ppm")
+	f, err := os.Create("circles.ppm")
 	check(err)
 	defer f.Close()
 	_, err1 := f.WriteString(ppm)
