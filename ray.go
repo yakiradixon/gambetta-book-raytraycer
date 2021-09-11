@@ -28,18 +28,18 @@ type color struct {
 }
 
 type scene struct {
-	v viewport
+	v       viewport
 	spheres []sphere
 }
 
 type sphere struct {
 	center tuple
 	radius float64
-	color color
+	color  color
 }
 
 type canvas struct {
-	width int
+	width  int
 	height int
 	pixels [][]color
 }
@@ -56,7 +56,7 @@ func (c canvas) init(w, h int) canvas {
 }
 
 func toPPM(c canvas) string {
-	return  ppmHeader(c) + ppmPixelData(c) + ppmFooter()
+	return ppmHeader(c) + ppmPixelData(c) + ppmFooter()
 }
 
 func ppmHeader(c canvas) string {
@@ -101,7 +101,6 @@ func ppmFooter() string {
 	return "\n"
 }
 
-
 func writePixelDataFor(psb *strings.Builder, c int, r *string) {
 	MinColorValue := 0
 	MaxColorValue := 255
@@ -128,14 +127,14 @@ type viewport struct {
 	size float64
 }
 
-func (c *canvas) toViewport(x float64, y float64, v viewport) tuple {
+func (c canvas) toViewport(x float64, y float64, v viewport) tuple {
 	// 1 is the projection plane D, projection plane Z
-	return tuple{x*v.size/float64(c.width), y*v.size/float64(c.height), 1}
+	return tuple{x * v.size / float64(c.width), y * v.size / float64(c.height), 1}
 }
 
-func (c *canvas) putPixel(x int, y int, color color) {
+func (c canvas) putPixel(x int, y int, color color) {
 	sx := (c.width / 2) + x
-	sy := (c.height/2) - y - 1
+	sy := (c.height / 2) - y - 1
 	c.pixels[sy][sx] = color
 }
 
@@ -167,15 +166,15 @@ func intersectRaySphere(O tuple, D tuple, s sphere) (float64, float64) {
 	r := s.radius
 	CO := O.subtract(s.center)
 	a := D.dot(D)
-	b := 2*CO.dot(D)
-	c := CO.dot(CO) - r * r
+	b := 2 * CO.dot(D)
+	c := CO.dot(CO) - r*r
 
 	discriminant := float64(b*b - 4*a*c)
 	if discriminant < 0 {
 		return math.Inf(0), math.Inf(0)
 	}
-	t1 := float64(-b) + math.Sqrt(discriminant) / float64(2*a)
-	t2 := float64(-b) - math.Sqrt(discriminant) / float64(2*a)
+	t1 := float64(-b) + math.Sqrt(discriminant)/float64(2*a)
+	t2 := float64(-b) - math.Sqrt(discriminant)/float64(2*a)
 	return t1, t2
 }
 
@@ -191,12 +190,12 @@ func main() {
 
 	s := scene{}
 	s.v = viewport{1}
-	s.spheres = []sphere{sphere{tuple{0, -1, 3}, 1, color{255, 0, 0}}, sphere{tuple{2, 0, 4}, 1, color{0, 0, 255}}, sphere{tuple{-2, 0 ,4}, 1, color{0, 255, 0}}}
+	s.spheres = []sphere{sphere{tuple{0, -1, 3}, 1, color{255, 0, 0}}, sphere{tuple{2, 0, 4}, 1, color{0, 0, 255}}, sphere{tuple{-2, 0, 4}, 1, color{0, 255, 0}}}
 
 	O := tuple{0, 0, 0}
 
-	for x := -c.width/2; x < c.width/2; x++ {
-		for y := -c.height/2; y < c.height/2; y++ {
+	for x := -c.width / 2; x < c.width/2; x++ {
+		for y := -c.height / 2; y < c.height/2; y++ {
 			D := c.toViewport(float64(x), float64(y), s.v)
 			color := traceRay(O, D, 1, math.Inf(0), s)
 			c.putPixel(x, y, color)
