@@ -13,12 +13,32 @@ type tuple struct {
 	z float64
 }
 
+func (t tuple) add(t1 tuple) tuple {
+	return tuple{t.x + t1.x, t.y + t1.y, t.z + t1.z}
+}
+
 func (t tuple) subtract(t1 tuple) tuple {
 	return tuple{t.x - t1.x, t.y - t1.y, t.z - t1.z}
 }
 
+func (t tuple) multiply(v float64) tuple {
+	return tuple{t.x * v, t.y * v, t.z * v}
+}
+
+func (t tuple) divide(v float64) tuple {
+	return tuple{t.x / v, t.y / v, t.z / v}
+}
+
 func (t tuple) dot(t1 tuple) float64 {
 	return (t.x * t1.x) + (t.y * t1.y) + (t.z * t1.z)
+}
+
+func (t tuple) magnitude() float64 {
+	return math.Sqrt(math.Pow(t.x, 2) + math.Pow(t.y, 2) + math.Pow(t.z, 2))
+}
+
+func (t tuple) normalize() tuple {
+	return tuple{t.x / t.magnitude(), t.y / t.magnitude(), t.z / t.magnitude()}
 }
 
 type color struct {
@@ -27,15 +47,27 @@ type color struct {
 	b int
 }
 
+func (c color) multiply(v float64) color {
+	return color{c.r * int(v), c.g * int(v), c.b * int(v)}
+}
+
 type scene struct {
 	v       viewport
 	spheres []sphere
+	lights  []light
 }
 
 type sphere struct {
 	center tuple
 	radius float64
 	color  color
+}
+
+type light struct {
+	ltype     string
+	intensity float64
+	position  tuple
+	direction tuple
 }
 
 type canvas struct {
@@ -159,7 +191,11 @@ func traceRay(O tuple, D tuple, tMin float64, tMax float64, sc scene) color {
 		return color{255, 255, 255}
 	}
 
-	return closestSphere.color
+	P := O.add(D.multiply(closestT))
+	N := P.subtract(closestSphere.center)
+	N = N.normalize()
+	return closestSphere.color.multiply(computeLighting(P, N, sc))
+
 }
 
 func intersectRaySphere(O tuple, D tuple, s sphere) (float64, float64) {
@@ -178,6 +214,28 @@ func intersectRaySphere(O tuple, D tuple, s sphere) (float64, float64) {
 	return t1, t2
 }
 
+func computeLighting(P tuple, N tuple, sc scene) float64 {
+	i := 0.0
+	var L tuple
+	var nDotL float64
+	for _, light := range sc.lights {
+		if light.ltype == "ambient" {
+			i += light.intensity
+		} else {
+			if light.ltype == "point" {
+				L = light.position.subtract(P)
+			} else {
+				L = light.direction
+			}
+			nDotL = N.dot(L)
+			if nDotL > 0 {
+				i += light.intensity * nDotL / (N.magnitude() * L.magnitude())
+			}
+		}
+	}
+	return i
+}
+
 func check(e error) {
 	if e != nil {
 		panic(e)
@@ -190,7 +248,8 @@ func main() {
 
 	s := scene{}
 	s.v = viewport{1}
-	s.spheres = []sphere{sphere{tuple{0, -1, 3}, 1, color{255, 0, 0}}, sphere{tuple{2, 0, 4}, 1, color{0, 0, 255}}, sphere{tuple{-2, 0, 4}, 1, color{0, 255, 0}}}
+	s.spheres = []sphere{sphere{tuple{0, -1, 3}, 1, color{255, 0, 0}}, sphere{tuple{2, 0, 4}, 1, color{0, 0, 255}}, sphere{tuple{-2, 0, 4}, 1, color{0, 255, 0}}, sphere{tuple{0, -5001, 0}, 5000, color{255, 255, 0}}}
+	s.lights = []light{light{"ambient", 0.2, tuple{0, 0, 0}, tuple{0, 0, 0}}, light{"point", 0.6, tuple{2, 1, 0}, tuple{0, 0, 0}}, light{"directional", 0.2, tuple{0, 0, 0}, tuple{1, 4, 4}}}
 
 	O := tuple{0, 0, 0}
 
