@@ -25,30 +25,22 @@ func (t tuple) multiply(v float64) tuple {
 	return tuple{t.x * v, t.y * v, t.z * v}
 }
 
-func (t tuple) divide(v float64) tuple {
-	return tuple{t.x / v, t.y / v, t.z / v}
-}
-
 func (t tuple) dot(t1 tuple) float64 {
 	return (t.x * t1.x) + (t.y * t1.y) + (t.z * t1.z)
 }
 
-func (t tuple) magnitude() float64 {
-	return math.Sqrt(math.Pow(t.x, 2) + math.Pow(t.y, 2) + math.Pow(t.z, 2))
-}
-
-func (t tuple) normalize() tuple {
-	return tuple{t.x / t.magnitude(), t.y / t.magnitude(), t.z / t.magnitude()}
+func (t tuple) length() float64 {
+	return math.Sqrt(t.dot(t));
 }
 
 type color struct {
-	r int
-	g int
-	b int
+	r float64
+	g float64
+	b float64
 }
 
 func (c color) multiply(v float64) color {
-	return color{c.r * int(v), c.g * int(v), c.b * int(v)}
+	return color{c.r * v, c.g * v, c.b * v}
 }
 
 type scene struct {
@@ -67,7 +59,6 @@ type light struct {
 	ltype     string
 	intensity float64
 	position  tuple
-	direction tuple
 }
 
 type canvas struct {
@@ -133,10 +124,10 @@ func ppmFooter() string {
 	return "\n"
 }
 
-func writePixelDataFor(psb *strings.Builder, c int, r *string) {
+func writePixelDataFor(psb *strings.Builder, c float64, r *string) {
 	MinColorValue := 0
 	MaxColorValue := 255
-	(*psb).WriteString(fmt.Sprintf("%d ", clamp(int(math.Round(float64(c*MaxColorValue))), MinColorValue, MaxColorValue)))
+	(*psb).WriteString(fmt.Sprintf("%d ", clamp(int(math.Round(c)), MinColorValue, MaxColorValue)))
 	*r += (*psb).String()
 	(*psb).Reset()
 }
@@ -193,9 +184,8 @@ func traceRay(O tuple, D tuple, tMin float64, tMax float64, sc scene) color {
 
 	P := O.add(D.multiply(closestT))
 	N := P.subtract(closestSphere.center)
-	N = N.normalize()
+	N = N.multiply(1.0 / N.length())
 	return closestSphere.color.multiply(computeLighting(P, N, sc))
-
 }
 
 func intersectRaySphere(O tuple, D tuple, s sphere) (float64, float64) {
@@ -216,20 +206,22 @@ func intersectRaySphere(O tuple, D tuple, s sphere) (float64, float64) {
 
 func computeLighting(P tuple, N tuple, sc scene) float64 {
 	i := 0.0
-	var L tuple
 	var nDotL float64
 	for _, light := range sc.lights {
 		if light.ltype == "ambient" {
 			i += light.intensity
 		} else {
+			var L tuple
 			if light.ltype == "point" {
 				L = light.position.subtract(P)
 			} else {
-				L = light.direction
+				// ltype "directional"
+				L = light.position
 			}
+
 			nDotL = N.dot(L)
 			if nDotL > 0 {
-				i += light.intensity * nDotL / (N.magnitude() * L.magnitude())
+				i += light.intensity * nDotL / (N.length() * L.length())
 			}
 		}
 	}
@@ -249,7 +241,8 @@ func main() {
 	s := scene{}
 	s.v = viewport{1}
 	s.spheres = []sphere{sphere{tuple{0, -1, 3}, 1, color{255, 0, 0}}, sphere{tuple{2, 0, 4}, 1, color{0, 0, 255}}, sphere{tuple{-2, 0, 4}, 1, color{0, 255, 0}}, sphere{tuple{0, -5001, 0}, 5000, color{255, 255, 0}}}
-	s.lights = []light{light{"ambient", 0.2, tuple{0, 0, 0}, tuple{0, 0, 0}}, light{"point", 0.6, tuple{2, 1, 0}, tuple{0, 0, 0}}, light{"directional", 0.2, tuple{0, 0, 0}, tuple{1, 4, 4}}}
+	// s.lights = []light{light{"ambient", 0.2, tuple{0, 0, 0}}, light{"point", 0.6, tuple{2, 1, 0}}, light{"directional", 0.2, tuple{1, 4, 4}}}
+	s.lights = []light{light{"ambient", 0.2, tuple{0, 0, 0}}}
 
 	O := tuple{0, 0, 0}
 
@@ -263,7 +256,7 @@ func main() {
 
 	ppm := toPPM(c)
 
-	f, err := os.Create("circles.ppm")
+	f, err := os.Create("diffuse.ppm")
 	check(err)
 	defer f.Close()
 	_, err1 := f.WriteString(ppm)
