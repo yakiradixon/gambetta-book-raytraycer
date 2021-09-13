@@ -25,12 +25,16 @@ func (t tuple) multiply(v float64) tuple {
 	return tuple{t.x * v, t.y * v, t.z * v}
 }
 
+func (t tuple) divide(v float64) tuple {
+	return tuple{t.x / v, t.y / v, t.z / v}
+}
+
 func (t tuple) dot(t1 tuple) float64 {
 	return (t.x * t1.x) + (t.y * t1.y) + (t.z * t1.z)
 }
 
 func (t tuple) length() float64 {
-	return math.Sqrt(t.dot(t));
+	return math.Sqrt(t.dot(t))
 }
 
 type color struct {
@@ -154,9 +158,9 @@ type viewport struct {
 	size float64
 }
 
-func (c canvas) toViewport(x float64, y float64, v viewport) tuple {
-	// 1 is the projection plane D, projection plane Z
-	return tuple{x * v.size / float64(c.width), y * v.size / float64(c.height), 1}
+func (c canvas) toViewport(x int, y int, vsize float64) tuple {
+	projectionPlane := 1.0
+	return tuple{float64(x) * vsize / float64(c.width), float64(y) * vsize / float64(c.height), projectionPlane}
 }
 
 func (c canvas) putPixel(x int, y int, color color) {
@@ -166,7 +170,7 @@ func (c canvas) putPixel(x int, y int, color color) {
 }
 
 func traceRay(O tuple, D tuple, tMin float64, tMax float64, sc scene) color {
-	closestT := tMax
+	closestT := math.Inf(0)
 	nilSphere := sphere{}
 	closestSphere := nilSphere
 	for _, s := range sc.spheres {
@@ -210,30 +214,24 @@ func intersectRaySphere(O tuple, D tuple, s sphere) (float64, float64) {
 
 func computeLighting(P tuple, N tuple, sc scene) float64 {
 	i := 0.0
-	var nDotL float64
 	for _, light := range sc.lights {
-		fmt.Printf("ltype is: %s\n", light.ltype)
 		if light.ltype == "ambient" {
 			i += light.intensity
 		} else {
 			var L tuple
 			if light.ltype == "point" {
-				// L = light.position.subtract(P)
-				L = P.subtract(light.position)
-			} else {
-				// ltype "directional"
+				L = light.position.subtract(P)
+			} else if light.ltype == "directional" {
 				L = light.position
+			} else {
+				panic("scene created with unknown light type")
 			}
 
-			nDotL = N.dot(L)
-			fmt.Printf("nDotL is %s\n", nDotL)
-			if nDotL > 0 {
-				i += light.intensity * nDotL / (N.length() * L.length())
+			if N.dot(L) > 0 {
+				i += light.intensity * N.dot(L) / (N.length() * L.length())
 			}
 		}
-		// fmt.Printf("intensity computed: %s\n", i)
 	}
-	// fmt.Printf("intensity computed: %s\n", i)
 	return i
 }
 
@@ -245,27 +243,24 @@ func check(e error) {
 
 func main() {
 	c := canvas{}
-	c = c.init(600, 600)
+	c = c.init(200, 200)
 
 	s := scene{}
-	s.v = viewport{1}
+	s.v = viewport{size: 1}
 	s.spheres = []sphere{sphere{tuple{0, -1, 3}, 1, color{255, 0, 0}}, sphere{tuple{2, 0, 4}, 1, color{0, 0, 255}}, sphere{tuple{-2, 0, 4}, 1, color{0, 255, 0}}, sphere{tuple{0, -5001, 0}, 5000, color{255, 255, 0}}}
-	s.lights = []light{light{"ambient", 0.2, tuple{0, 0, 0}}, light{"point", 0.6, tuple{2, 1, 0}}}
-	// s.lights = []light{light{"ambient", 0.2, tuple{0, 0, 0}}}
-	// s.lights = []light{light{"ambient", 0.2, tuple{0, 0, 0}}, light{"point", 0.6, tuple{2, 1, 0}}, light{"directional", 0.2, tuple{1, 4, 4}}}
+	s.lights = []light{light{"ambient", 0.2, tuple{0, 0, 0}}, light{"point", 0.6, tuple{2, 1, 0}}, light{"directional", 0.2, tuple{1, 4, 4}}}
 
 	O := tuple{0, 0, 0}
 
 	for x := -c.width / 2; x < c.width/2; x++ {
 		for y := -c.height / 2; y < c.height/2; y++ {
-			D := c.toViewport(float64(x), float64(y), s.v)
+			D := c.toViewport(x, y, s.v.size)
 			color := traceRay(O, D, 1, math.Inf(0), s)
 			c.putPixel(x, y, color.clamp())
 		}
 	}
-	// fmt.Printf("before toPPM(): %s", c)
+
 	ppm := toPPM(c)
-	// fmt.Printf("after toPPM(): %s", ppm)
 
 	f, err := os.Create("latest_render.ppm")
 	check(err)
