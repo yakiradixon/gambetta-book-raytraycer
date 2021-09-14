@@ -171,6 +171,24 @@ func (c canvas) putPixel(x int, y int, color color) {
 }
 
 func traceRay(origin tuple, direction tuple, tMin float64, tMax float64, sc scene) color {
+	closestSphere, closest_t := closestIntersection(origin, direction, tMin, tMax, sc)
+
+	nilSphere := sphere{}
+	if closestSphere == nilSphere {
+		// Return background color
+		return color{255, 255, 255}
+	}
+
+	point := add(origin, multiply(closest_t, direction))
+	normal := subtract(point, closestSphere.center)
+	normal = multiply(1.0 / length(normal), normal)
+
+	view := multiply(-1, direction)
+	lighting := computeLighting(point, normal, view, closestSphere.specular, sc)
+	return multiplyColor(lighting, closestSphere.color)
+}
+
+func closestIntersection(origin tuple, direction tuple, tMin float64, tMax float64, sc scene) (sphere, float64) {
 	closest_t := math.Inf(0)
 	nilSphere := sphere{}
 	closestSphere := nilSphere
@@ -186,18 +204,7 @@ func traceRay(origin tuple, direction tuple, tMin float64, tMax float64, sc scen
 		}
 	}
 
-	if closestSphere == nilSphere {
-		// Return background color
-		return color{255, 255, 255}
-	}
-
-	point := add(origin, multiply(closest_t, direction))
-	normal := subtract(point, closestSphere.center)
-	normal = multiply(1.0 / length(normal), normal)
-
-	view := multiply(-1, direction)
-	lighting := computeLighting(point, normal, view, closestSphere.specular, sc.lights)
-	return multiplyColor(lighting, closestSphere.color)
+	return closestSphere, closest_t
 }
 
 func intersectRaySphere(origin tuple, direction tuple, s sphere) (float64, float64) {
@@ -215,19 +222,29 @@ func intersectRaySphere(origin tuple, direction tuple, s sphere) (float64, float
 	return t1, t2
 }
 
-func computeLighting(point tuple, normal tuple, view tuple, specular float64, lights []light) float64 {
+func computeLighting(point tuple, normal tuple, view tuple, specular float64, sc scene) float64 {
 	i := 0.0
-	for _, light := range lights {
+
+	for _, light := range sc.lights {
 		if light.ltype == "ambient" {
 			i += light.intensity
 		} else {
 			var L tuple
+			var min, max float64
 			if light.ltype == "point" {
 				L = subtract(light.position, point)
+				max = 1
 			} else if light.ltype == "directional" {
 				L = light.position
+				max = math.Inf(0)
 			} else {
 				panic("scene created with unknown light type")
+			}
+
+			shadowSphere, _ := closestIntersection(point, normal, min, max, sc)
+			nilSphere := sphere{}
+			if shadowSphere != nilSphere {
+				continue
 			}
 
 			if dot(normal, L) > 0 {
