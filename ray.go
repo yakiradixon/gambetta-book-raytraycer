@@ -43,6 +43,10 @@ type color struct {
 	b float64
 }
 
+func addColor(c1, c2 color) color {
+	return color{c1.r + c2.r, c1.g + c2.g, c1.b + c2.b}
+}
+
 func multiplyColor(v float64, c color) color {
 	return color{v * c.r, v * c.g, v * c.b}
 }
@@ -58,6 +62,7 @@ type sphere struct {
 	radius float64
 	color  color
 	specular float64
+	reflective float64
 }
 
 type light struct {
@@ -170,7 +175,7 @@ func (c canvas) putPixel(x int, y int, color color) {
 	c.pixels[sy][sx] = color
 }
 
-func traceRay(origin tuple, direction tuple, tMin float64, tMax float64, sc scene) color {
+func traceRay(origin tuple, direction tuple, tMin float64, tMax float64, recursionDepth int, sc scene) color {
 	closestSphere, closest_t := closestIntersection(origin, direction, tMin, tMax, sc)
 	nilSphere := sphere{}
 	if closestSphere == nilSphere {
@@ -184,7 +189,14 @@ func traceRay(origin tuple, direction tuple, tMin float64, tMax float64, sc scen
 
 	view := multiply(-1, direction)
 	lighting := computeLighting(point, normal, view, closestSphere.specular, sc)
-	return multiplyColor(lighting, closestSphere.color)
+	localColor := multiplyColor(lighting, closestSphere.color)
+
+	if recursionDepth == 0 || closestSphere.reflective <= 0.0 {
+		return localColor
+	}
+	reflectedRay := reflectRay(view, normal)
+	reflectedColor := traceRay(point, reflectedRay, 0.001, math.Inf(0), recursionDepth - 1, sc)
+	return addColor(multiplyColor(1.0 - closestSphere.reflective, localColor), multiplyColor(closestSphere.reflective, reflectedColor))
 }
 
 func closestIntersection(origin tuple, direction tuple, tMin float64, tMax float64, sc scene) (sphere, float64) {
@@ -252,7 +264,7 @@ func computeLighting(point tuple, normal tuple, view tuple, specular float64, sc
 			}
 
 			if specular != -1 {
-				R := subtract(multiply(2.0 * dot(normal, L), normal), L)
+				R := reflectRay(L, normal)
 				if dot(R, view) > 0 {
 					i += light.intensity * math.Pow(dot(R, view) / (length(R) * length(view)), specular)
 				}
@@ -260,6 +272,10 @@ func computeLighting(point tuple, normal tuple, view tuple, specular float64, sc
 		}
 	}
 	return i
+}
+
+func reflectRay(ray, normal tuple) tuple {
+	return subtract(multiply(2.0 * dot(normal, ray), normal), ray)
 }
 
 func check(e error) {
@@ -274,10 +290,10 @@ func main() {
 	s := scene{}
 	s.v = viewport{size: 1}
 
-	sp1 := sphere{tuple{0, -1, 3}, 1, color{255, 0, 0}, 500}
-	sp2 := sphere{tuple{2, 0, 4}, 1, color{0, 0, 255}, 500}
-	sp3 := sphere{tuple{-2, 0, 4}, 1, color{0, 255, 0}, 10}
-	sp4 := sphere{tuple{0, -5001, 0}, 5000, color{255, 255, 0}, 1000}
+	sp1 := sphere{tuple{0, -1, 3}, 1, color{255, 0, 0}, 500, 0.2}
+	sp2 := sphere{tuple{2, 0, 4}, 1, color{0, 0, 255}, 500, 0.3}
+	sp3 := sphere{tuple{-2, 0, 4}, 1, color{0, 255, 0}, 10, 0.4}
+	sp4 := sphere{tuple{0, -5001, 0}, 5000, color{255, 255, 0}, 1000, 0.5}
 	s.spheres = []sphere{sp1, sp2, sp3, sp4}
 
 	l1 := light{"ambient", 0.2, tuple{0, 0, 0}}
@@ -288,10 +304,12 @@ func main() {
 
 	O := tuple{0, 0, 0}
 
+	recursionDepth := 3
+
 	for x := -c.width / 2; x < c.width/2; x++ {
 		for y := -c.height / 2; y < c.height/2; y++ {
 			D := c.toViewport(x, y, s.v.size)
-			color := traceRay(O, D, 1, math.Inf(0), s)
+			color := traceRay(O, D, 1, math.Inf(0), recursionDepth, s)
 			c.putPixel(x, y, color.clamp())
 		}
 	}
