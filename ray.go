@@ -195,7 +195,8 @@ func traceRay(origin tuple, direction tuple, tMin float64, tMax float64, sc scen
 	normal := subtract(point, closestSphere.center)
 	normal = multiply(1.0 / length(normal), normal)
 
-	lighting := computeLighting(point, normal, sc.lights)
+	view := multiply(-1, direction)
+	lighting := computeLighting(point, normal, view, closestSphere.specular, sc.lights)
 	return multiplyColor(lighting, closestSphere.color)
 }
 
@@ -214,7 +215,7 @@ func intersectRaySphere(origin tuple, direction tuple, s sphere) (float64, float
 	return t1, t2
 }
 
-func computeLighting(point tuple, normal tuple, lights []light) float64 {
+func computeLighting(point tuple, normal tuple, view tuple, specular float64, lights []light) float64 {
 	i := 0.0
 	for _, light := range lights {
 		if light.ltype == "ambient" {
@@ -231,6 +232,13 @@ func computeLighting(point tuple, normal tuple, lights []light) float64 {
 
 			if dot(normal, L) > 0 {
 				i += light.intensity * dot(normal, L) / (length(normal) * length(L))
+			}
+
+			if specular != -1 {
+				R := subtract(multiply(2.0 * dot(normal, L), normal), L)
+				if dot(R, view) > 0 {
+					i += light.intensity * math.Pow(dot(R, view) / (length(R) * length(view)), specular)
+				}
 			}
 		}
 	}
