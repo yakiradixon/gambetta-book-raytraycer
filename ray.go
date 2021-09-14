@@ -207,8 +207,8 @@ func intersectRaySphere(O tuple, D tuple, s sphere) (float64, float64) {
 	if discriminant < 0 {
 		return math.Inf(0), math.Inf(0)
 	}
-	t1 := float64(-b) + math.Sqrt(discriminant)/float64(2*a)
-	t2 := float64(-b) - math.Sqrt(discriminant)/float64(2*a)
+	t1 := (-b + math.Sqrt(discriminant))/(2*a)
+	t2 := (-b - math.Sqrt(discriminant))/(2*a)
 	return t1, t2
 }
 
