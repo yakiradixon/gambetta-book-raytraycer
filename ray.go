@@ -172,7 +172,6 @@ func (c canvas) putPixel(x int, y int, color color) {
 
 func traceRay(origin tuple, direction tuple, tMin float64, tMax float64, sc scene) color {
 	closestSphere, closest_t := closestIntersection(origin, direction, tMin, tMax, sc)
-
 	nilSphere := sphere{}
 	if closestSphere == nilSphere {
 		// Return background color
@@ -231,6 +230,7 @@ func computeLighting(point tuple, normal tuple, view tuple, specular float64, sc
 		} else {
 			var L tuple
 			var min, max float64
+			min = 0.001
 			if light.ltype == "point" {
 				L = subtract(light.position, point)
 				max = 1
@@ -241,7 +241,7 @@ func computeLighting(point tuple, normal tuple, view tuple, specular float64, sc
 				panic("scene created with unknown light type")
 			}
 
-			shadowSphere, _ := closestIntersection(point, normal, min, max, sc)
+			shadowSphere, _ := closestIntersection(point, L, min, max, sc)
 			nilSphere := sphere{}
 			if shadowSphere != nilSphere {
 				continue
