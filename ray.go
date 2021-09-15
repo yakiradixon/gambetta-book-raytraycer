@@ -75,6 +75,7 @@ type canvas struct {
 	width  int
 	height int
 	pixels [][]color
+	scene  scene
 }
 
 func (c canvas) init(w, h int) canvas {
@@ -85,7 +86,7 @@ func (c canvas) init(w, h int) canvas {
 			pixels[x][y] = color{0, 0, 0}
 		}
 	}
-	return canvas{w, h, pixels}
+	return canvas{w, h, pixels, scene{}}
 }
 
 func toPPM(c canvas) string {
@@ -284,42 +285,62 @@ func check(e error) {
 	}
 }
 
+func render(canvases []canvas) {
+	for i, c := range canvases {
+
+		O := tuple{0, 0, 0}
+
+		recursionDepth := 3
+
+		for x := -c.width / 2; x < c.width/2; x++ {
+			for y := -c.height / 2; y < c.height/2; y++ {
+				D := c.toViewport(x, y, c.scene.v.size)
+				color := traceRay(O, D, 1, math.Inf(0), recursionDepth, c.scene)
+				c.putPixel(x, y, color.clamp())
+			}
+		}
+
+		ppm := toPPM(c)
+		filename := fmt.Sprintf("scene_%d_latest.ppm", i+1)
+		f, err := os.Create(filename)
+		check(err)
+		defer f.Close()
+		_, err1 := f.WriteString(ppm)
+		check(err1)
+		f.Sync()
+
+	}
+}
+
 func main() {
-	c := canvas{}
-	c = c.init(600, 600)
-	s := scene{}
-	s.v = viewport{size: 1}
+
+	c1 := canvas{}
+	c1 = c1.init(600, 600)
+
+	c1.scene.v = viewport{size: 1}
 
 	sp1 := sphere{tuple{0, -1, 3}, 1, color{255, 0, 0}, 500, 0.2}
 	sp2 := sphere{tuple{2, 0, 4}, 1, color{0, 0, 255}, 500, 0.3}
 	sp3 := sphere{tuple{-2, 0, 4}, 1, color{0, 255, 0}, 10, 0.4}
 	sp4 := sphere{tuple{0, -5001, 0}, 5000, color{255, 255, 0}, 1000, 0.5}
-	s.spheres = []sphere{sp1, sp2, sp3, sp4}
+	c1.scene.spheres = []sphere{sp1, sp2, sp3, sp4}
 
 	l1 := light{"ambient", 0.2, tuple{0, 0, 0}}
 	l2 := light{"point", 0.6, tuple{2, 1, 0}}
 	l3 := light{"directional", 0.2, tuple{1, 4, 4}}
 
-	s.lights = []light{l1, l2, l3}
+	c1.scene.lights = []light{l1, l2, l3}
 
-	O := tuple{0, 0, 0}
+	c2 := canvas{}
+	c2 = c2.init(400, 400)
 
-	recursionDepth := 3
+	c2.scene.v = viewport{size: 1}
 
-	for x := -c.width / 2; x < c.width/2; x++ {
-		for y := -c.height / 2; y < c.height/2; y++ {
-			D := c.toViewport(x, y, s.v.size)
-			color := traceRay(O, D, 1, math.Inf(0), recursionDepth, s)
-			c.putPixel(x, y, color.clamp())
-		}
-	}
+	c2.scene.spheres = []sphere{sphere{tuple{0, -1, 3}, 1, color{57, 249, 163}, 100, 0.6}, sphere{tuple{0, 1, 6}, 2, color{112, 219, 50}, 500, 0.3}}
 
-	ppm := toPPM(c)
+	c2.scene.lights = []light{light{"point", 0.2, tuple{0, 0, 0}}, light{"directional", 0.2, tuple{1, 4, 4}}}
 
-	f, err := os.Create("latest_render.ppm")
-	check(err)
-	defer f.Close()
-	_, err1 := f.WriteString(ppm)
-	check(err1)
-	f.Sync()
+	canvases := []canvas{c1, c2}
+
+	render(canvases)
 }
